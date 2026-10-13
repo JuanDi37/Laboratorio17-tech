@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Modelamos un circuito Tor y seguimos un flujo de datos de un venture. La privacidad se entiende mejor cuando nombramos al observador.">
+<meta name="color-scheme" content="dark">
+<title>Lab 17 · Tor Browser y Threat Modeling | Web3 Labs</title>
+<link rel="stylesheet" href="style.css">
+<script type="module" src="script.js">
+</script>
+</head>
+<body class="lab-17">
+<a class="skip-link" href="#introduccion">Saltar al contenido</a>
+<header class="navbar">
+<a class="brand" href="../index.html">LAYER<span class="brand-accent">/</span>03</a>
+<nav aria-label="Navegación del laboratorio">
+<a href="#desarrollo">Desarrollo</a>
+<a href="#interactivo">Explorar</a>
+<a href="#resultados">Resultados</a>
+<a href="README.md">README ↗</a>
+</nav>
+<span class="nav-code">L17 / S20</span>
+</header>
+<main>
+<header class="hero">
+<div class="hero-copy">
+<p class="eyebrow">LABORATORIO 17 <span>SESIÓN 20</span>
+</p>
+<h1>¿Quién puede<br>
+<em>ver qué?</em>
+</h1>
+<p class="hero-description">Modelamos un circuito Tor y seguimos un flujo de datos de un venture. La privacidad se entiende mejor cuando nombramos al observador.</p>
+<div class="hero-meta">
+<span>Tor Browser / HTTPS / I2P conceptual</span>
+<span>Informe académico interactivo</span>
+</div>
+<a class="hero-link" href="#interactivo">Recorrer las capas del circuito <span aria-hidden="true">↘</span>
+</a>
+</div>
+<div class="hero-art">
+<div class="privacy-art">
+<div class="privacy-layer layer-outer">
+<span>RED LOCAL</span>
+</div>
+<div class="privacy-layer layer-middle">
+<span>RED TOR</span>
+</div>
+<div class="privacy-layer layer-inner">
+<span>TLS / HTTPS</span>
+</div>
+<div class="privacy-center">
+<span>↗</span>
+<strong>CONTENIDO</strong>
+</div>
+<span class="privacy-label">Las capas cambian la visibilidad.<br>Los extremos siguen importando.</span>
+</div>
+</div>
+<div class="hero-footer">
+<span>ORIGEN · RUTA · DESTINO</span>
+<span>HTML · CSS · JavaScript</span>
+</div>
+</header>
+<div class="report-layout">
+<aside class="chapter-nav" aria-label="Índice del informe">
+<span>EN ESTE INFORME</span>
+<a href="#introduccion">01 / Contexto</a>
+<a href="#instrucciones">02 / Instrucciones</a>
+<a href="#objetivos">03 / Objetivos</a>
+<a href="#tecnologias">04 / Tecnologías</a>
+<a href="#desarrollo">05 / Desarrollo</a>
+<a href="#interactivo">06 / Interacción</a>
+<a href="#resultados">07 / Resultados</a>
+<a href="#analisis">08 / Análisis crítico</a>
+<a href="#rubrica">09 / Rúbrica</a>
+<a href="#conclusiones">10 / Conclusiones</a>
+<a href="#aprendizajes">11 / Aprendizajes</a>
+</aside>
+<div class="report">
+<section id="introduccion" class="report-section " aria-labelledby="introduccion-title">
+<div class="section-heading">
+<span class="section-index">introduccion</span>
+<h2 id="introduccion-title">Introducción</h2>
+</div>
+<p>La privacidad no es una propiedad uniforme de una conexión. Una red local observa un tramo, un servidor conoce solicitudes y un dispositivo comprometido puede leer contenido antes del cifrado. Analizamos Tor Browser a partir de esas posiciones y lo comparamos con HTTPS directo e I2P conceptual. El objetivo consiste en formular afirmaciones acotadas: qué dato queda visible, para qué actor y bajo qué supuestos.</p>
+<p>Aplicamos el análisis a Aurora, un venture ficticio cuyo equipo consulta documentación pública y accede a un portal de trabajo. Esos flujos tienen riesgos diferentes. Una consulta sin autenticación puede evitar revelar directamente la IP de origen al destino mediante Tor; una cuenta identificada vuelve a asociar la sesión con su titular. El informe documenta un circuito conceptual, sin afirmar una conexión real de Tor Browser.</p>
+</section>
+<section id="instrucciones" class="report-section instructions" aria-labelledby="instrucciones-title">
+<div class="section-heading">
+<span class="section-index">instrucciones</span>
+<h2 id="instrucciones-title">Instrucciones del laboratorio</h2>
+</div>
+<p>En este laboratorio trabajamos en Visual Studio Code para elaborar un informe de privacidad sobre Tor Browser, navegación HTTPS e I2P conceptual, aplicado al flujo de información de un venture ficticio. Representamos un circuito de navegación clearnet con guard, middle y exit, y analizamos qué pueden observar la red local, el proveedor de internet, cada nodo Tor y el servidor de destino. Distinguimos la protección de las capas Tor de la sesión HTTPS que mantiene cifrado el contenido hasta el servidor, explicando por qué un exit no debe interpretarse como un lector del payload TLS. Construimos una tabla de visibilidad y una comparación con navegación normal, atendiendo a direcciones IP, resolución de destinos, volumen, tiempos y cuentas autenticadas. Desarrollamos THREAT.md con activos, adversarios, fronteras de confianza, posibilidades de correlación y medidas aplicadas a consultas públicas y acceso a un portal del venture. Implementamos un circuito interactivo cuyos participantes muestran información visible y oculta bajo escenarios predefinidos, sin presentar la visualización como una medición de tráfico real. Analizamos fingerprints, compromiso de endpoints, exits maliciosos y límites de anonimato, y comparamos conceptualmente la orientación interna de I2P. Entregamos la página, sus estilos, interacciones, modelo de amenazas y README, respetando el alcance académico sin procedimientos de evasión institucional ni instalación de relays, bridges o servicios onion.</p>
+</section>
+<section id="objetivos" class="report-section " aria-labelledby="objetivos-title">
+<div class="section-heading">
+<span class="section-index">objetivos</span>
+<h2 id="objetivos-title">Objetivos</h2>
+</div>
+<div class="concept-grid">
+<article class="concept-card">
+<h3>Precisar el observador</h3>
+<p>Asignamos a cada actor una posición en el flujo. La pregunta relevante es qué puede observar desde allí, sin combinar capacidades de varios adversarios sin explicación.</p>
+</article>
+<article class="concept-card">
+<h3>Separar protecciones</h3>
+<p>HTTPS protege contenido entre navegador y servidor. Tor cambia la exposición del origen y la ruta; ninguna capa elimina identidad revelada por una cuenta.</p>
+</article>
+<article class="concept-card">
+<h3>Construir un threat model</h3>
+<p>Definimos activos, supuestos, adversarios y riesgo residual. Elegimos medidas en función del flujo del venture y no del nombre de una herramienta.</p>
+</article>
+</div>
+</section>
+<section id="tecnologias" class="report-section " aria-labelledby="tecnologias-title">
+<div class="section-heading">
+<span class="section-index">tecnologias</span>
+<h2 id="tecnologias-title">Tecnologías utilizadas</h2>
+</div>
+<div class="concept-grid">
+<article class="concept-card">
+<h3>Tor Browser</h3>
+<p>Navegador con integración Tor y medidas para reducir diferencias identificables entre usuarios. La protección depende también de comportamiento, actualizaciones y seguridad del dispositivo.</p>
+</article>
+<article class="concept-card">
+<h3>Circuito Tor</h3>
+<p>Para clearnet modelamos tres roles: guard, middle y exit. Cada salto conoce adyacentes; el objetivo es distribuir conocimiento de origen y destino.</p>
+</article>
+<article class="concept-card">
+<h3>HTTPS</h3>
+<p>TLS autentica el servidor y cifra la sesión de aplicación hasta él. El servidor termina esa protección y procesa las solicitudes.</p>
+</article>
+<article class="concept-card">
+<h3>I2P conceptual</h3>
+<p>Red orientada a servicios dentro de su entorno, con túneles unidireccionales entrantes y salientes. El acceso a clearnet mediante outproxies tiene otras dependencias.</p>
+</article>
+</div>
+</section>
+<section id="desarrollo" class="report-section " aria-labelledby="desarrollo-title">
+<div class="section-heading">
+<span class="section-index">desarrollo</span>
+<h2 id="desarrollo-title">Desarrollo del laboratorio</h2>
+</div>
+<article class="subsection">
+<h3>01 / Definir el flujo y sus límites</h3>
+<p>El flujo de consulta comienza en el navegador del equipo, atraviesa red local e ISP y termina en un servidor de documentación. El activo principal es la asociación entre persona, dirección de origen y destino consultado. El contenido del documento es público, pero el patrón de lectura puede revelar intereses comerciales. El segundo flujo incluye un inicio de sesión: entonces el servidor recibe una identidad de cuenta además de la consulta.</p>
+<p>Suponemos dispositivos actualizados, HTTPS válido y ausencia de malware en el endpoint. No suponemos que todos los nodos pertenezcan al mismo actor ni que un adversario observe necesariamente toda la red. Al cambiar esos supuestos, cambia la conclusión. THREAT.md explicita las fronteras para que el análisis no convierta una protección parcial en una promesa absoluta.</p>
+</article>
+<figure class="diagram">
+<div class="flow">
+<div class="flow-node">
+<span class="node-index">01</span>
+<strong>Equipo</strong>
+<small>Origen y contenido local</small>
+</div>
+<span class="flow-arrow" aria-hidden="true">→</span>
+<div class="flow-node">
+<span class="node-index">02</span>
+<strong>Guard</strong>
+<small>Conoce IP del cliente</small>
+</div>
+<span class="flow-arrow" aria-hidden="true">→</span>
+<div class="flow-node">
+<span class="node-index">03</span>
+<strong>Middle</strong>
+<small>Conoce saltos adyacentes</small>
+</div>
+<span class="flow-arrow" aria-hidden="true">→</span>
+<div class="flow-node">
+<span class="node-index">04</span>
+<strong>Exit</strong>
+<small>Contacta el destino</small>
+</div>
+<span class="flow-arrow" aria-hidden="true">→</span>
+<div class="flow-node">
+<span class="node-index">05</span>
+<strong>Servidor HTTPS</strong>
+<small>Termina TLS y lee solicitud</small>
+</div>
+</div>
+<figcaption>Flujo clearnet con Tor y HTTPS: TLS continúa hasta el destino.</figcaption>
+</figure>
+<article class="subsection">
+<h3>02 / Interpretar guard, middle y exit</h3>
+<p>El guard constituye el primer salto y puede conocer la IP de origen. Su papel estable reduce la exposición repetida a entradas nuevas; no significa que el usuario seleccione tres nodos manualmente en esta demostración. El middle conecta posiciones del circuito y no recibe por su rol la identidad completa de ambos extremos. El exit abre la conexión hacia el servidor clearnet y observa el destino de red y el flujo que sale.</p>
+<p>Si usamos HTTPS, el exit transporta datos TLS y no puede leer normalmente rutas, cuerpos ni credenciales cifradas. Si la aplicación usa HTTP sin TLS, el contenido de ese tramo puede quedar visible y modificable. La separación se explica en <a href="https://support.torproject.org/about-tor/security/https-encryption-and-tor/" target="_blank" rel="noopener">la visualización oficial Tor y HTTPS</a>. La tabla siguiente aplica el supuesto HTTPS; no extiende esa conclusión a protocolos inseguros.</p>
+</article>
+<div class="table-scroll">
+<table>
+<caption>Visibilidad bajo Tor + HTTPS para un destino clearnet</caption>
+<thead>
+<tr>
+<th scope="col">Actor</th>
+<th scope="col">IP de origen</th>
+<th scope="col">Destino final</th>
+<th scope="col">Contenido</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th scope="row">Red local / ISP</th>
+<td>Sí, del abonado o equipo según posición</td>
+<td>Ve conexión al guard; no destino final por ese flujo</td>
+<td>Cifrado; tiempos y volumen visibles</td>
+</tr>
+<tr>
+<th scope="row">Guard</th>
+<td>Sí, IP que se conecta</td>
+<td>Conoce siguiente salto; no destino final por su rol</td>
+<td>No lee payload HTTPS</td>
+</tr>
+<tr>
+<th scope="row">Middle</th>
+<td>Conoce peers adyacentes</td>
+<td>No obtiene ambos extremos por su rol</td>
+<td>No lee payload HTTPS</td>
+</tr>
+<tr>
+<th scope="row">Exit</th>
+<td>Conoce anterior, no IP del cliente por el circuito</td>
+<td>Sí, destino de red y resolución de salida</td>
+<td>No lee payload TLS válido</td>
+</tr>
+<tr>
+<th scope="row">Servidor</th>
+<td>Ve IP de exit</td>
+<td>Conoce su propio servicio</td>
+<td>Lee solicitud tras TLS; cuenta y cookies</td>
+</tr>
+</tbody>
+</table>
+</div>
+<article class="subsection">
+<h3>03 / Comparar rutas y finalidades</h3>
+<p>En HTTPS directo, el destino ve la IP pública que se conecta y recibe la solicitud descifrada. La red local e ISP observan direcciones de destino y metadatos; el nombre del servicio puede conocerse por DNS, SNI u otros indicios, con variaciones según cifrado de DNS y ECH. Por eso no afirmamos que todos los nombres sean siempre visibles, ni que HTTPS oculte toda relación entre origen y servicio.</p>
+<div class="table-scroll">
+<table>
+<caption>Comparación conceptual para el venture</caption>
+<thead>
+<tr>
+<th scope="col">Propiedad</th>
+<th scope="col">HTTPS directo</th>
+<th scope="col">Tor + HTTPS</th>
+<th scope="col">I2P conceptual</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th scope="row">Destino recibe origen</th>
+<td>IP pública de conexión</td>
+<td>IP del exit</td>
+<td>Identidad de destino I2P; depende del flujo</td>
+</tr>
+<tr>
+<th scope="row">Contenido en tránsito</th>
+<td>TLS hasta servidor</td>
+<td>TLS más capas Tor</td>
+<td>Túneles y cifrado propios; protocolo de aplicación importa</td>
+</tr>
+<tr>
+<th scope="row">Servicios clearnet</th>
+<td>Ruta habitual</td>
+<td>Salida mediante exit</td>
+<td>Salida mediante outproxy, si disponible</td>
+</tr>
+<tr>
+<th scope="row">Servicios internos</th>
+<td>Fuera del modelo</td>
+<td>No abordamos servicios onion</td>
+<td>Orientación principal de I2P</td>
+</tr>
+<tr>
+<th scope="row">Riesgo residual</th>
+<td>Metadatos y endpoints</td>
+<td>Correlación y endpoints</td>
+<td>Correlación, endpoints y dependencias de túneles</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>I2P utiliza un diseño distinto: túneles unidireccionales y comunicación centrada en destinos de su red. No lo tratamos como un sustituto idéntico de Tor para navegar clearnet. El análisis conceptual evita recetas de instalación y evalúa orientación, fronteras y dependencia de salidas. La documentación <a href="https://geti2p.net/en/comparison/tor" target="_blank" rel="noopener">I2P frente a Tor</a> fundamenta esa diferencia arquitectónica.</p>
+</article>
+<article class="subsection">
+<h3>04 / Desarrollar THREAT.md</h3>
+<p>El modelo distingue tres grupos de activos: identidad del equipo, historial de destinos y contenido del portal. Consideramos observadores de red local, proveedor, nodo malicioso, servidor y actor con acceso al endpoint. La correlación combina patrones temporales o volúmenes en dos posiciones; no requiere descifrar el contenido. Una consulta aislada y una observación extensa no aportan la misma capacidad de inferencia.</p>
+<figure class="code-block">
+<figcaption>
+<span>Extracto del modelo aplicado · representación documental</span>
+<span>Texto</span>
+</figcaption>
+<pre>
+<code data-language="Texto">Flujo: equipo → red → servidor de documentación
+Activos: origen, destinos, sesión, contenido de trabajo
+Supuestos: endpoint íntegro; HTTPS válido; software actualizado
+Adversarios: observador local; relay; servidor; correlador
+Fronteras: dispositivo / acceso / red Tor / servicio
+Riesgo residual: cuenta identificada, fingerprint, timing
+Medidas: minimizar datos, separar finalidades, revisar sesiones</code>
+</pre>
+</figure>
+<p>Para documentos públicos priorizamos minimizar datos y evitar autenticación innecesaria. Para el portal priorizamos control de acceso, seguridad del equipo y conservación limitada de sesiones. Tor puede cambiar la IP visible al portal, pero no borra la identidad de una cuenta laboral. No usamos este modelo para evadir políticas de una institución; analizamos privacidad dentro de un contexto autorizado.</p>
+</article>
+</section>
+<section id="interactivo" class="report-section interactive-section" aria-labelledby="interactivo-title">
+<div class="section-heading">
+<span class="section-index">interactivo</span>
+<h2 id="interactivo-title">Circuito interactivo / posiciones de observación</h2>
+</div>
+<p>Elegimos un participante para mostrar su perspectiva. El control de cuenta permite observar cómo cambia la identificación en el servidor aunque la ruta de red se conserve.</p>
+<div class="tor-lab">
+<div class="circuit-path" role="group" aria-label="Participantes del circuito">
+<button data-observer="local" aria-pressed="true">
+<span>○</span>Red local</button>
+<button data-observer="guard" aria-pressed="false">
+<span>◉</span>Guard</button>
+<button data-observer="middle" aria-pressed="false">
+<span>◎</span>Middle</button>
+<button data-observer="exit" aria-pressed="false">
+<span>◌</span>Exit</button>
+<button data-observer="servidor" aria-pressed="false">
+<span>▣</span>Servidor</button>
+</div>
+<div class="observer-view" aria-live="polite">
+<p class="eyebrow">PERSPECTIVA ACTIVA</p>
+<h3 id="observer-title">Red local / ISP</h3>
+<dl>
+<dt>Puede observar</dt>
+<dd id="observer-visible">IP del equipo, conexión al guard, tiempos y volumen.</dd>
+<dt>No obtiene por este flujo</dt>
+<dd id="observer-hidden">Destino final ni contenido HTTPS.</dd>
+</dl>
+</div>
+<div class="scenario-controls">
+<button id="tor-account" aria-pressed="false">Escenario: sin cuenta autenticada</button>
+<button id="tor-https" aria-pressed="true">HTTPS activo</button>
+</div>
+<p id="tor-scenario" aria-live="polite">Modelo conceptual de Tor + HTTPS. Los datos no proceden de un circuito real.</p>
+</div>
+</section>
+<section id="resultados" class="report-section " aria-labelledby="resultados-title">
+<div class="section-heading">
+<span class="section-index">resultados</span>
+<h2 id="resultados-title">Resultados e interpretación</h2>
+</div>
+<p>La matriz muestra que Tor distribuye conocimiento de la ruta: el guard conoce origen, el exit conoce destino y el servidor recibe una IP de salida. HTTPS conserva su función de proteger la aplicación hasta el servidor. Seleccionar HTTP en la visualización revela el cambio en el exit; activar una cuenta identificada muestra que el destino reconoce al usuario aun sin conocer su IP original.</p>
+<p>Estos resultados son inferencias del modelo bajo supuestos explícitos, no capturas de Tor Browser ni mediciones de una conexión. La interacción conserva la ruta para aislar el efecto de cada condición. El archivo THREAT.md contiene la comparación de HTTPS, Tor e I2P, los adversarios y las prioridades del venture, de modo que el lector pueda evaluar los límites de cada conclusión.</p>
+<div class="concept-grid">
+<article class="concept-card">
+<h3>Metadatos</h3>
+<p>El cifrado deja patrones de tamaño, tiempos y conexión. No todos los observadores ven los mismos patrones.</p>
+</article>
+<article class="concept-card">
+<h3>Identidad</h3>
+<p>La IP es un identificador de red; una cuenta, cookie o patrón único puede asociar actividad con una persona.</p>
+</article>
+<article class="concept-card">
+<h3>Contenido</h3>
+<p>Una aplicación puede cifrar transporte y todavía mostrar el contenido en ambos extremos. La seguridad del dispositivo sigue siendo decisiva.</p>
+</article>
+</div>
+</section>
+<section id="analisis" class="report-section " aria-labelledby="analisis-title">
+<div class="section-heading">
+<span class="section-index">analisis</span>
+<h2 id="analisis-title">Análisis crítico</h2>
+</div>
+<article class="subsection">
+<h3>Correlación y fingerprint</h3>
+<p>Un adversario capaz de observar entrada y salida puede intentar correlacionar actividad mediante tiempos y volúmenes. Tor no promete resolver de manera perfecta ese adversario. La duración de observación, tráfico concurrente y capacidad del actor influyen en el riesgo. Del mismo modo, un fingerprint combina rasgos del navegador y comportamiento; modificar extensivamente un entorno diseñado para uniformidad puede hacerlo más distintivo.</p>
+<p>Una cuenta identificada, documentos personales enviados al destino o contenido que revela contexto pueden reducir anonimato sin ninguna falla del circuito. La privacidad exige analizar flujo de aplicación, no solo paquete de red. La visualización ilustra precisamente esa diferencia al mantener Tor y cambiar el estado de autenticación.</p>
+</article>
+<article class="subsection">
+<h3>Exits y dispositivos</h3>
+<p>Un exit malicioso puede observar y alterar protocolos sin cifrado de aplicación. HTTPS válido limita esa capacidad, pero no convierte al nodo en un participante confiable ni oculta el destino de red. En el dispositivo, malware, capturas o acceso a la sesión evitan por completo esa protección de transporte. Las prioridades del venture incluyen actualizaciones, datos mínimos y control de acceso, además de seleccionar una ruta apropiada.</p>
+</article>
+</section>
+<section id="rubrica" class="report-section " aria-labelledby="rubrica-title">
+<div class="section-heading">
+<span class="section-index">rubrica</span>
+<h2 id="rubrica-title">Rúbrica de evaluación</h2>
+</div>
+<p class="note">Criterios y porcentajes originales proporcionados para este laboratorio. La columna de alcance describe lo presentado, sin asignar una calificación ni acreditar ejecuciones externas.</p>
+<div class="table-scroll">
+<table>
+<caption>Rúbrica académica original · laboratorio 17</caption>
+<thead>
+<tr>
+<th scope="col">Criterio</th>
+<th scope="col">Peso</th>
+<th scope="col">Alcance del trabajo presentado</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th scope="row">Tor Browser oficial conectado y circuito documentado</th>
+<td>25%</td>
+<td>Circuito conceptual documentado; no se afirma conexión real de Tor Browser.</td>
+</tr>
+<tr>
+<th scope="row">Tabla de visibilidad de nodos y comparación con navegador normal</th>
+<td>20%</td>
+<td>Matriz por participante para HTTPS y Tor.</td>
+</tr>
+<tr>
+<th scope="row">THREAT.md comparando HTTPS, Tor e I2P</th>
+<td>30%</td>
+<td>Modelo aplicado al venture y documento incluido.</td>
+</tr>
+<tr>
+<th scope="row">Análisis de adversarios, límites de Tor e I2P conceptual</th>
+<td>15%</td>
+<td>Correlación, endpoints, cuentas, fingerprint e I2P.</td>
+</tr>
+<tr>
+<th scope="row">Comentarios de aprendizaje</th>
+<td>10%</td>
+<td>Reflexión académica sobre privacidad y alcance.</td>
+</tr>
+</tbody>
+<tfoot>
+<tr>
+<th scope="row">Total</th>
+<td>100%</td>
+<td>Las simulaciones se identifican y no acreditan ejecuciones externas.</td>
+</tr>
+</tfoot>
+</table>
+</div>
+<p class="note">Restricciones aplicadas: alcance conceptual y académico; sin evasión de controles institucionales ni instalación de relays, bridges o servicios onion. No se proporcionó texto adicional de penalizaciones; no asignamos deducciones ni sanciones inventadas.</p>
+</section>
+<section id="conclusiones" class="report-section " aria-labelledby="conclusiones-title">
+<div class="section-heading">
+<span class="section-index">conclusiones</span>
+<h2 id="conclusiones-title">Conclusiones</h2>
+</div>
+<ol class="conclusions">
+<li>Tor distribuye visibilidad entre participantes del circuito, pero no elimina todos los observadores. Nombrar al actor y su posición permite expresar una garantía con alcance verificable.</li>
+<li>HTTPS continúa siendo relevante al utilizar Tor para clearnet. El exit ve la salida hacia el destino, mientras que el payload TLS permanece protegido hasta el servidor bajo los supuestos del modelo.</li>
+<li>Una cuenta autenticada identifica al usuario en la aplicación aunque cambie la IP visible. El threat model debe considerar sesiones y contenido junto con rutas de red.</li>
+<li>I2P tiene orientación y arquitectura propias. La comparación conceptual ayuda a seleccionar objetivos de privacidad sin presentar las herramientas como soluciones intercambiables ni promesas absolutas.</li>
+</ol>
+</section>
+<section id="aprendizajes" class="report-section " aria-labelledby="aprendizajes-title">
+<div class="section-heading">
+<span class="section-index">aprendizajes</span>
+<h2 id="aprendizajes-title">Aprendizajes</h2>
+</div>
+<p>Aprendimos a preguntar quién observa cada tramo y a separar origen, destino, contenido e identidad de aplicación. Comprendimos que Tor, HTTPS e I2P responden a contextos distintos y que un modelo de amenazas útil conserva supuestos, adversarios y riesgos residuales en lugar de prometer anonimato universal.</p>
+</section>
+<section id="documentacion" class="report-section " aria-labelledby="documentacion-title">
+<div class="section-heading">
+<span class="section-index">documentacion</span>
+<h2 id="documentacion-title">Documentación y fuentes</h2>
+</div>
+<a class="doc-link" href="README.md">Leer el README del laboratorio 17 ↗</a>
+<a class="doc-link" href="THREAT.md">Consultar THREAT.md ↗</a>
+<p>Las referencias fundamentan los protocolos y las declaraciones atribuidas. Los cálculos locales, modelos didácticos y límites de observación se explican junto a cada resultado.</p>
+<ul class="sources">
+<li>
+<a href="https://support.torproject.org/about-tor/security/https-encryption-and-tor/" target="_blank" rel="noopener noreferrer">Tor Project · visibilidad con HTTPS ↗</a>
+</li>
+<li>
+<a href="https://support.torproject.org/tor-browser/security/guard-relay/" target="_blank" rel="noopener noreferrer">Tor Project · función del guard ↗</a>
+</li>
+<li>
+<a href="https://spec.torproject.org/guard-spec/index.html" target="_blank" rel="noopener noreferrer">Tor Project · especificación de guards ↗</a>
+</li>
+<li>
+<a href="https://geti2p.net/en/comparison/tor" target="_blank" rel="noopener noreferrer">I2P · comparación arquitectónica con Tor ↗</a>
+</li>
+</ul>
+</section>
+</div>
+</div>
+</main>
+<footer class="site-footer">
+<a href="../index.html">← Colección Web3 Labs</a>
+<p>Laboratorio 17 · Tor Browser y Threat Modeling · Sesión 20</p>
+<a href="#">Volver al inicio ↑</a>
+</footer>
+</body>
+</html>
